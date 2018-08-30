@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+installer() {
+  local install_type=$1
+  local version=$2
+  local install_path=$3
+
+  local tmp_download_dir=$(mktemp -d -t graalvm_XXXXXXX)
+
+  if [ "version" != "${install_type}" ]; then
+    echo "The asdf-graalvm plugin only supports intalling official"
+    echo "binary releases as built by the graal team."
+    echo "If you want to install another version from source, see:"
+    echo "https://github.com/oracle/graal/"
+    exit 1
+  fi
+
+  # running this in a subshell
+  # we don't want to disturb current working dir
+  (
+    set -e
+
+    local tar_file=$(downloaded_file_path $version $tmp_download_dir)
+    local tar_url=$(download_url $version)
+    download_tar $tar_file $tar_url || fail "could not download graalvm archive"
+    tar zxf $tar_file -C $install_path --strip-components=$(tar_strip_level) || fail "failed to extract archive"
+
+  ) || (rm -rf $install_path $tmp_download_dir; exit 1)
+}
+
+fail() {
+    echo "asdf-graalvm error:" $*
+    exit 1
+}
+
+tar_strip_level() {
+	  case "$(uname -s)" in
+		    Linux) echo 1;;
+        Darwin) echo 3;;
+        *) fail "$(uname -s) is not supported" ;;
+    esac
+}
+
+get_variant() {
+	  case "$(uname -s)" in
+		    Linux)
+			      case "$(uname -m)" in
+				        x86_64) echo linux-amd64 ;;
+				        *) fail "$(uname -m) is not supported on linux" ;;
+			      esac ;;
+		    Darwin)
+			      case "$(uname -m)" in
+				        x86_64) echo macos-amd64 ;;
+				        *) fail "$(uname -m) is not supported on macos" ;;
+			      esac ;;
+		    *) fail "$(uname -s) is not supported" ;;
+	  esac
+}
+
+download_tar() {
+  local download_path=$1
+  local download_url=$2
+  curl -Lo $download_path -C - $download_url
+}
+
+downloaded_file_path() {
+  local version=$1
+  local tmp_download_dir=$2
+  local pkg_name="graalvm-${version}.tar.gz"
+  echo "$tmp_download_dir/$pkg_name"
+}
+
+download_url() {
+  local version=$1
+  local variant=$(get_variant)
+  echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${version}-${variant}.tar.gz"
+}
+
+installer $ASDF_INSTALL_TYPE $ASDF_INSTALL_VERSION $ASDF_INSTALL_PATH
