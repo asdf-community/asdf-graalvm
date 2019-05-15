@@ -8,7 +8,7 @@ installer() {
   local tmp_download_dir=$(mktemp -d -t graalvm_XXXXXXX)
 
   if [ "version" != "${install_type}" ]; then
-    echo "The asdf-graalvm plugin only supports intalling official"
+    echo "The asdf-graalvm plugin only supports installing official"
     echo "binary releases as built by the graal team."
     echo "If you want to install another version from source, see:"
     echo "https://github.com/oracle/graal/"
@@ -73,7 +73,7 @@ downloaded_file_path() {
 download_url() {
   local version=$1
   local variant=$(get_variant)
-  echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${version}-${variant}.tar.gz"
+  echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${variant}-${version}.tar.gz"
 }
 
 installer $ASDF_INSTALL_TYPE $ASDF_INSTALL_VERSION $ASDF_INSTALL_PATH
