@@ -67,6 +67,10 @@ get_variant() {
 download_tar() {
   local download_path=$1
   local download_url=$2
+  if test "302" != $(curl -qsI -o /dev/null -w "%{http_code}" "$download_url"); then
+    echo "Could not find archive at URL $download_url"
+    exit 2
+  fi
   curl -Lo $download_path -C - $download_url
 }
 

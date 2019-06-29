@@ -1,5 +1,7 @@
 # asdf-graalvm
 
+[![Build Status](https://travis-ci.org/vic/asdf-graalvm.svg?branch=master)](https://travis-ci.org/vic/asdf-graalvm)
+
 [GraalVM](https://www.graalvm.org/) plugin for [asdf](https://github.com/asdf-vm/asdf) version manager
 
 ## Install
