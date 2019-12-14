@@ -1,2 +1,10 @@
 #!/usr/bin/env bash
-git ls-remote --tags --refs https://github.com/oracle/graal "vm-*" | grep -v "enterprise" | sed 's;^.*refs/tags/vm-\(.*\)$;\1;' | xargs echo
+cmd="curl -s"
+if [ -n "$GITHUB_API_TOKEN" ]; then
+ cmd="$cmd -H 'Authorization: token $GITHUB_API_TOKEN'"
+fi
+
+(
+  $cmd 'https:///api.github.com/repos/oracle/graal/releases' | jq -r 'sort_by(.created_at) | .[] | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name | ltrimstr("vm-")'
+  $cmd 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | . + {"java": ["java8", "java11"]} | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name + "-" + .java[]| ltrimstr("vm-")'
+) | xargs echo
