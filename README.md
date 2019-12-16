@@ -1,6 +1,6 @@
 # asdf-graalvm
 
-[![Build Status](https://travis-ci.org/vic/asdf-graalvm.svg?branch=master)](https://travis-ci.org/vic/asdf-graalvm)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/vic/asdf-graalvm/plugin-test?style=flat-square)](https://github.com/vic/asdf-graalvm/actions)
 
 [GraalVM](https://www.graalvm.org/) plugin for [asdf](https://github.com/asdf-vm/asdf) version manager
 
