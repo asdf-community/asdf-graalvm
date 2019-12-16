@@ -8,7 +8,7 @@ installer() {
   local tmp_download_dir=$(mktemp -d -t graalvm_XXXXXXX)
 
   if [ "version" != "${install_type}" ]; then
-    echo "The asdf-graalvm plugin only supports intalling official"
+    echo "The asdf-graalvm plugin only supports installing official"
     echo "binary releases as built by the graal team."
     echo "If you want to install another version from source, see:"
     echo "https://github.com/oracle/graal/"
@@ -87,10 +87,19 @@ version_is_one() {
   test "$major_version" -eq 1 
 }
 
+version_is_ce_build() {
+  local version=$1
+  echo "$version" | grep -q -- "^.*-java\d\+$"
+}
+
 download_url() {
   local version=$1
   local variant=$(get_variant $version)
-  if version_is_one $version; then
+  if version_is_ce_build $version; then
+    local graalvm_version=$(echo $version | cut -f1 -d-)
+    local java_version=$(echo $version | cut -f2 -d-)
+    echo "https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${graalvm_version}/graalvm-ce-${java_version}-${variant}-${graalvm_version}.tar.gz"
+  elif version_is_one $version; then
     echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${version}-${variant}.tar.gz"
   else
     echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${variant}-${version}.tar.gz"
