@@ -89,7 +89,7 @@ version_is_one() {
 
 version_is_ce_build() {
   local version=$1
-  echo "$version" | grep -q -P "^.*-java\d+$"
+  echo "$version" | grep -q -E "^.*-java\d+$"
 }
 
 download_url() {
