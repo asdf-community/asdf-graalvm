@@ -48,11 +48,11 @@ tar_strip_level() {
 }
 
 get_variant() {
-  local version="$1"
   case "$(uname -s)" in
     Linux)
       case "$(uname -m)" in
         x86_64) echo linux-amd64 ;;
+        arm64 | aarch64) echo linux-aarch64 ;;
         *) fail "$(uname -m) is not supported on linux" ;;
       esac
       ;;
@@ -65,6 +65,7 @@ get_variant() {
             echo darwin-amd64
           fi
           ;;
+        arm64 | aarch64) echo darwin-aarch64 ;;
         *) fail "$(uname -m) is not supported on macos" ;;
       esac
       ;;
