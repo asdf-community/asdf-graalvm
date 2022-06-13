@@ -4,7 +4,24 @@ if [ -n "$GITHUB_API_TOKEN" ]; then
  cmd="$cmd -H 'Authorization: token $GITHUB_API_TOKEN'"
 fi
 
+get_variant() {
+  case "$(uname -s)" in
+    Linux)
+      case "$(uname -m)" in
+        x86_64) echo linux-amd64 ;;
+        arm64) echo linux-aarch64 ;;
+        *) fail "$(uname -m) is not supported on linux" ;;
+      esac ;;
+    Darwin)
+      case "$(uname -m)" in
+        x86_64) echo darwin-amd64 ;;
+        arm64) echo darwin-aarch64 ;;
+        *) fail "$(uname -m) is not supported on macos" ;;
+      esac ;;
+    *) fail "$(uname -s) is not supported" ;;
+  esac
+}
+
 (
-  $cmd 'https:///api.github.com/repos/oracle/graal/releases' | jq -r 'sort_by(.created_at) | .[] | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name | ltrimstr("vm-")'
-  $cmd 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | . + {"java": ["java8", "java11"]} | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name + "-" + .java[]| ltrimstr("vm-")'
+  $cmd 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r "sort_by(.created_at) | .[] | select(.prerelease==false) | .assets[].name | capture(\"^graalvm-ce-(?<java>java[0-9]+)-$(get_variant)-(?<version>[0-9\\\.]+)\\\.tar\\\.gz$\") | [.version,.java] | join(\"-\")"
 ) | xargs echo
