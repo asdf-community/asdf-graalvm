@@ -42,22 +42,17 @@ tar_strip_level() {
 }
 
 get_variant() {
-  local version="$1"
   case "$(uname -s)" in
     Linux)
       case "$(uname -m)" in
         x86_64) echo linux-amd64 ;;
+        arm64) echo linux-aarch64 ;;
         *) fail "$(uname -m) is not supported on linux" ;;
       esac ;;
     Darwin)
       case "$(uname -m)" in
-        x86_64)
-          if version_is_one $version; then
-            echo macos-amd64
-          else
-            echo darwin-amd64
-          fi
-          ;;
+        x86_64) echo darwin-amd64 ;;
+        arm64) echo darwin-aarch64 ;;
         *) fail "$(uname -m) is not supported on macos" ;;
       esac ;;
     *) fail "$(uname -s) is not supported" ;;
@@ -81,29 +76,12 @@ downloaded_file_path() {
   echo "$tmp_download_dir/$pkg_name"
 }
 
-version_is_one() {
-  local version=$1
-  local major_version=$(echo $version | cut -d'.' -f 1)
-  test "$major_version" -eq 1 
-}
-
-version_is_ce_build() {
-  local version=$1
-  echo "$version" | grep -q -E "^.*-java[0-9]+$"
-}
-
 download_url() {
   local version=$1
-  local variant=$(get_variant $version)
-  if version_is_ce_build $version; then
-    local graalvm_version=$(echo $version | cut -f1 -d-)
-    local java_version=$(echo $version | cut -f2 -d-)
-    echo "https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${graalvm_version}/graalvm-ce-${java_version}-${variant}-${graalvm_version}.tar.gz"
-  elif version_is_one $version; then
-    echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${version}-${variant}.tar.gz"
-  else
-    echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${variant}-${version}.tar.gz"
-  fi
+  local variant=$(get_variant)
+  local graalvm_version=$(echo $version | cut -f1 -d-)
+  local java_version=$(echo $version | cut -f2 -d-)
+  echo "https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${graalvm_version}/graalvm-ce-${java_version}-${variant}-${graalvm_version}.tar.gz"
 }
 
 installer $ASDF_INSTALL_TYPE $ASDF_INSTALL_VERSION $ASDF_INSTALL_PATH
