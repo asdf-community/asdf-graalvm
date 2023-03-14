@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 cmd="curl -s"
 if [ -n "$GITHUB_API_TOKEN" ]; then
- cmd="$cmd -H 'Authorization: token $GITHUB_API_TOKEN'"
+  cmd="$cmd -H 'Authorization: token $GITHUB_API_TOKEN'"
 fi
 
 (
-  $cmd 'https:///api.github.com/repos/oracle/graal/releases' | jq -r 'sort_by(.created_at) | .[] | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name | ltrimstr("vm-")'
-  $cmd 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | . + {"java": ["java8", "java11"]} | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name + "-" + .java[]| ltrimstr("vm-")'
+  eval "$cmd" 'https:///api.github.com/repos/oracle/graal/releases' | jq -r 'sort_by(.created_at) | .[] | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name | ltrimstr("vm-")'
+  eval "$cmd" 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | . + {"java": ["java8", "java11"]} | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name + "-" + .java[]| ltrimstr("vm-")'
 ) | xargs echo

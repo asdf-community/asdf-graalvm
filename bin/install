@@ -5,7 +5,8 @@ installer() {
   local version=$2
   local install_path=$3
 
-  local tmp_download_dir=$(mktemp -d -t graalvm_XXXXXXX)
+  local tmp_download_dir
+  tmp_download_dir=$(mktemp -d -t graalvm_XXXXXXX)
 
   if [ "version" != "${install_type}" ]; then
     echo "The asdf-graalvm plugin only supports installing official"
@@ -20,23 +21,28 @@ installer() {
   (
     set -e
 
-    local tar_file=$(downloaded_file_path $version $tmp_download_dir)
-    local tar_url=$(download_url $version)
-    download_tar $tar_file $tar_url || fail "could not download graalvm archive"
-    tar zxf $tar_file -C $install_path --strip-components=$(tar_strip_level) || fail "failed to extract archive"
+    local tar_file
+    tar_file=$(downloaded_file_path "$version" "$tmp_download_dir")
+    local tar_url
+    tar_url=$(download_url "$version")
+    download_tar "$tar_file" "$tar_url" || fail "could not download graalvm archive"
+    tar zxf "$tar_file" -C "$install_path" --strip-components="$(tar_strip_level)" || fail "failed to extract archive"
 
-  ) || (rm -rf $install_path $tmp_download_dir; exit 1)
+  ) || (
+    rm -rf "$install_path" "$tmp_download_dir"
+    exit 1
+  )
 }
 
 fail() {
-  echo "asdf-graalvm error:" $*
+  echo "asdf-graalvm error:" "$*"
   exit 1
 }
 
 tar_strip_level() {
   case "$(uname -s)" in
-    Linux) echo 1;;
-    Darwin) echo 3;;
+    Linux) echo 1 ;;
+    Darwin) echo 3 ;;
     *) fail "$(uname -s) is not supported" ;;
   esac
 }
@@ -48,18 +54,20 @@ get_variant() {
       case "$(uname -m)" in
         x86_64) echo linux-amd64 ;;
         *) fail "$(uname -m) is not supported on linux" ;;
-      esac ;;
+      esac
+      ;;
     Darwin)
       case "$(uname -m)" in
         x86_64)
-          if version_is_one $version; then
+          if version_is_one "$version"; then
             echo macos-amd64
           else
             echo darwin-amd64
           fi
           ;;
         *) fail "$(uname -m) is not supported on macos" ;;
-      esac ;;
+      esac
+      ;;
     *) fail "$(uname -s) is not supported" ;;
   esac
 }
@@ -67,11 +75,11 @@ get_variant() {
 download_tar() {
   local download_path=$1
   local download_url=$2
-  if test "302" != $(curl -qsI -o /dev/null -w "%{http_code}" "$download_url"); then
+  if test "302" != "$(curl -qsI -o /dev/null -w "%{http_code}" "$download_url")"; then
     echo "Could not find archive at URL $download_url"
     exit 2
   fi
-  curl -Lo $download_path -C - $download_url
+  curl -Lo "$download_path" -C - "$download_url"
 }
 
 downloaded_file_path() {
@@ -83,8 +91,9 @@ downloaded_file_path() {
 
 version_is_one() {
   local version=$1
-  local major_version=$(echo $version | cut -d'.' -f 1)
-  test "$major_version" -eq 1 
+  local major_version
+  major_version=$(echo "$version" | cut -d'.' -f 1)
+  test "$major_version" -eq 1
 }
 
 version_is_ce_build() {
@@ -94,16 +103,19 @@ version_is_ce_build() {
 
 download_url() {
   local version=$1
-  local variant=$(get_variant $version)
-  if version_is_ce_build $version; then
-    local graalvm_version=$(echo $version | cut -f1 -d-)
-    local java_version=$(echo $version | cut -f2 -d-)
+  local variant
+  variant=$(get_variant "$version")
+  if version_is_ce_build "$version"; then
+    local graalvm_version
+    graalvm_version=$(echo "$version" | cut -f1 -d-)
+    local java_version
+    java_version=$(echo "$version" | cut -f2 -d-)
     echo "https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${graalvm_version}/graalvm-ce-${java_version}-${variant}-${graalvm_version}.tar.gz"
-  elif version_is_one $version; then
+  elif version_is_one "$version"; then
     echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${version}-${variant}.tar.gz"
   else
     echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${variant}-${version}.tar.gz"
   fi
 }
 
-installer $ASDF_INSTALL_TYPE $ASDF_INSTALL_VERSION $ASDF_INSTALL_PATH
+installer "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
