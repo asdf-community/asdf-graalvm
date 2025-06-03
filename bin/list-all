@@ -6,5 +6,5 @@ fi
 
 (
   eval "$cmd" 'https:///api.github.com/repos/oracle/graal/releases' | jq -r 'sort_by(.created_at) | .[] | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name | ltrimstr("vm-")'
-  eval "$cmd" 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | . + {"java": ["java8", "java11"]} | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name + "-" + .java[]| ltrimstr("vm-")'
-) | xargs echo
+  eval "$cmd" 'https:///api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | select(.prerelease == false and (.assets | length > 0)) | if (.tag_name | startswith("vm-")) then ((.tag_name | ltrimstr("vm-")) as $base_version | ["java8","java11"] as $java_versions | $java_versions[] | ($base_version + "-" + .)) elif (.tag_name | startswith("jdk-")) then ((.tag_name | ltrimstr("jdk-")) as $base_version_full | (.tag_name | capture("jdk-(?<jver>[0-9]+)[-.+].*") | .jver) as $java_major_version | if $java_major_version then $base_version_full else empty end) else empty end'
+) | sort -V | xargs echo

@@ -47,6 +47,37 @@ tar_strip_level() {
   esac
 }
 
+is_new_jdk_format_version() {
+  local version=$1
+  # Matches versions like 21.0.1 or 24.0.1 or 21.0.3+7.1
+  # And does NOT match 22.0.0.2-java8
+  if echo "$version" | grep -q -E '^[0-9]+\.[0-9]+\.[0-9]+([+.][0-9a-zA-Z._-]+)*$' && ! echo "$version" | grep -q -E -- "-java[0-9]+$"; then
+    return 0 # true
+  else
+    return 1 # false
+  fi
+}
+
+get_os_arch_for_new_format() {
+  case "$(uname -s)" in
+    Linux)
+      case "$(uname -m)" in
+        x86_64) echo "linux-x64" ;;
+        aarch64) echo "linux-aarch64" ;;
+        *) fail "$(uname -m) ($(uname -p 2>/dev/null || echo 'N/A')) is not supported on linux for new GraalVM format" ;;
+      esac
+      ;;
+    Darwin)
+      case "$(uname -m)" in
+        x86_64) echo "macos-x64" ;;
+        arm64 | aarch64) echo "macos-aarch64" ;;
+        *) fail "$(uname -m) ($(uname -p 2>/dev/null || echo 'N/A')) is not supported on macOS for new GraalVM format" ;;
+      esac
+      ;;
+    *) fail "$(uname -s) is not supported" ;;
+  esac
+}
+
 get_variant() {
   local version="$1"
   case "$(uname -s)" in
@@ -85,7 +116,29 @@ download_tar() {
 downloaded_file_path() {
   local version=$1
   local tmp_download_dir=$2
-  local pkg_name="graalvm-${version}.tar.gz"
+  local pkg_name
+
+  if is_new_jdk_format_version "$version"; then
+    local os_arch_new_format
+    os_arch_new_format=$(get_os_arch_for_new_format)
+    pkg_name="graalvm-community-jdk-${version}_${os_arch_new_format}_bin.tar.gz"
+  elif version_is_ce_build "$version"; then
+    local variant
+    variant=$(get_variant "$version")
+    local graalvm_version
+    graalvm_version=$(echo "$version" | cut -f1 -d-)
+    local java_version
+    java_version=$(echo "$version" | cut -f2 -d-)
+    pkg_name="graalvm-ce-${java_version}-${variant}-${graalvm_version}.tar.gz"
+  elif version_is_one "$version"; then
+    local variant
+    variant=$(get_variant "$version")
+    pkg_name="graalvm-ce-${version}-${variant}.tar.gz"
+  else # Oracle GraalVM (major version not 1)
+    local variant
+    variant=$(get_variant "$version")
+    pkg_name="graalvm-ce-${variant}-${version}.tar.gz"
+  fi
   echo "$tmp_download_dir/$pkg_name"
 }
 
@@ -104,16 +157,23 @@ version_is_ce_build() {
 download_url() {
   local version=$1
   local variant
-  variant=$(get_variant "$version")
-  if version_is_ce_build "$version"; then
+  local os_arch_new_format
+
+  if is_new_jdk_format_version "$version"; then
+    os_arch_new_format=$(get_os_arch_for_new_format)
+    echo "https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-${version}/graalvm-community-jdk-${version}_${os_arch_new_format}_bin.tar.gz"
+  elif version_is_ce_build "$version"; then # Old CE format e.g. 22.3.3-java11
+    variant=$(get_variant "$version") # Uses existing get_variant
     local graalvm_version
     graalvm_version=$(echo "$version" | cut -f1 -d-)
     local java_version
     java_version=$(echo "$version" | cut -f2 -d-)
     echo "https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${graalvm_version}/graalvm-ce-${java_version}-${variant}-${graalvm_version}.tar.gz"
-  elif version_is_one "$version"; then
+  elif version_is_one "$version"; then # Oracle GraalVM e.g. 19.2.1 (but major version 1)
+    variant=$(get_variant "$version")
     echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${version}-${variant}.tar.gz"
-  else
+  else # Oracle GraalVM e.g. 20.0.0 (major version not 1)
+    variant=$(get_variant "$version")
     echo "https://github.com/oracle/graal/releases/download/vm-${version}/graalvm-ce-${variant}-${version}.tar.gz"
   fi
 }
