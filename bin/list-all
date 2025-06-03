@@ -26,4 +26,5 @@ get_variant() {
   "$(dirname "$0")/liberica-nik" list
    eval "$cmd" 'https://api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | select (.prerelease == false) | select (.tag_name | contains("vm-")) | select (.assets | length > 0) | .tag_name | ltrimstr("vm-")'
   eval "$cmd" 'https://api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r "sort_by(.created_at) | .[] | select(.prerelease==false) | .assets[].name | capture(\"^graalvm-ce-(?<java>java[0-9]+)-$(get_variant)-(?<version>[0-9\\\.]+)\\\.tar\\\.gz$\") | [.version,.java] | join(\"-\")" | sort
-) | xargs echo
+  eval "$cmd" 'https://api.github.com/repos/graalvm/graalvm-ce-builds/releases' | jq -r 'sort_by(.created_at) | .[] | select(.prerelease == false and (.assets | length > 0)) | .tag_name | select(startswith("jdk-")) | ltrimstr("jdk-")'
+) | sort -V | xargs echo
