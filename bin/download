@@ -7,13 +7,11 @@ download_liberica() {
   local version=$1
   local archive=$2
   local release filename jdk_version tag asset download_url digest
-
   if ! release=$(liberica_releases | jq -er --arg version "$version" '.[] | select(.version == $version) | [.filename, .jdk] | @tsv'); then
     echo "Liberica NIK version $version is unavailable for this platform." >&2
     return 1
   fi
   read -r filename jdk_version <<<"$release"
-
   tag=$(jq -nr --arg tag "$version-$jdk_version" '$tag | @uri')
   if ! asset=$(
     github_api "https://api.github.com/repos/bell-sw/LibericaNIK/releases/tags/$tag" |
@@ -30,9 +28,7 @@ download_liberica() {
     return 1
   fi
   read -r download_url digest <<<"$asset"
-
   curl -fLsS --retry 2 --max-time 300 --proto '=https' --proto-redir '=https' -o "$archive" "$download_url"
-
   if [ -n "$(command -v sha256sum)" ]; then
     set -- sha256sum
   else

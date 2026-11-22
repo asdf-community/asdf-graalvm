@@ -8,10 +8,9 @@ ${GITHUB_API_TOKEN:+Authorization: Bearer $GITHUB_API_TOKEN}
 EOF
 
 github_releases() {
-  local repo=$1 page=1 response count
-
+  local page=1 response count
   while :; do
-    response=$(github_api "https://api.github.com/repos/$repo/releases?per_page=100&page=$page")
+    response=$(github_api "https://api.github.com/repos/$1/releases?per_page=100&page=$page")
     jq -c '.[]' <<<"$response"
     count=$(jq 'length' <<<"$response")
     if [ "$count" -lt 100 ]; then
@@ -22,31 +21,22 @@ github_releases() {
 }
 
 graalvm_releases() {
-  local os legacy_os arch legacy_arch
-
-  case "$(uname -s)" in
-    Linux)
-      if [ -e "/lib/ld-musl-$(uname -m).so.1" ]; then
-        return 0
-      fi
-      os=linux legacy_os=linux
-      ;;
-    Darwin)
-      os=macos legacy_os=darwin
-      ;;
+  local cpu platform legacy
+  cpu=$(uname -m)
+  case "$(uname -s):$cpu" in
+    Linux:x86_64) platform=linux-x64 legacy=linux-amd64 ;;
+    Linux:arm64 | Linux:aarch64) platform=linux-aarch64 legacy=linux-aarch64 ;;
+    Darwin:x86_64) platform=macos-x64 legacy=darwin-amd64 ;;
+    Darwin:arm64 | Darwin:aarch64) platform=macos-aarch64 legacy=darwin-aarch64 ;;
     *) return 0 ;;
   esac
-
-  case "$(uname -m)" in
-    x86_64) arch=x64 legacy_arch=amd64 ;;
-    arm64 | aarch64) arch=aarch64 legacy_arch=aarch64 ;;
-    *) return 0 ;;
-  esac
-
+  if [ "${platform%%-*}" = linux ] && [ -e "/lib/ld-musl-$cpu.so.1" ]; then
+    return 0
+  fi
   (
     github_releases graalvm/graalvm-ce-builds
     github_releases oracle/graal
-  ) | jq -rs --arg requested "${1:-}" --arg platform "$os-$arch" --arg legacy "$legacy_os-$legacy_arch" '
+  ) | jq -rs --arg requested "${1:-}" --arg platform "$platform" --arg legacy "$legacy" '
     def version_for($tag):
       if $tag | startswith("vm-") then
         ($tag | ltrimstr("vm-")) as $version
@@ -64,7 +54,6 @@ graalvm_releases() {
         | .version
       else empty
       end;
-
     [ .[] | select((.draft | not) and ($requested != "" or (.prerelease | not)))
       | .tag_name as $tag
       | .assets[]
@@ -90,7 +79,6 @@ liberica_releases() {
     x86_64) arch=x86 ;;
     *) return 0 ;;
   esac
-
   case "$(uname -s)" in
     Darwin) os=macos ;;
     Linux)
@@ -102,7 +90,6 @@ liberica_releases() {
       ;;
     *) return 0 ;;
   esac
-
   curl -fsS --max-time 30 --get 'https://api.bell-sw.com/v1/nik/releases' \
     --data-urlencode "os=$os" --data-urlencode "arch=$arch" --data-urlencode 'bitness=64' \
     --data-urlencode 'bundle-type=standard' --data-urlencode 'package-type=tar.gz' \
