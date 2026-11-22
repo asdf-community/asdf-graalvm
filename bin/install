@@ -118,4 +118,9 @@ download_url() {
   fi
 }
 
+if [ "$ASDF_INSTALL_TYPE" = version ] && [ "${ASDF_INSTALL_VERSION#liberica-nik-}" != "$ASDF_INSTALL_VERSION" ]; then
+  strip_level=$(tar_strip_level) || exit 1
+  exec "$(dirname "$0")/liberica-nik" install "${ASDF_INSTALL_VERSION#liberica-nik-}" "$ASDF_INSTALL_PATH" "$strip_level"
+fi
+
 installer "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
