@@ -1,0 +1,33 @@
+name: Test Plugin
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: 0 1 * * MON
+
+permissions:
+  contents: read
+
+jobs:
+  test-plugin:
+    name: Test Plugin
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+        version:
+          - latest
+          - latest:liberica-nik-
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: asdf-vm/actions/plugin-test@v4
+        with:
+          giturl: ${{ github.event.pull_request.head.repo.clone_url || format('{0}/{1}.git', github.server_url, github.repository) }}
+          version: ${{ matrix.version }}
+          command: java -version
