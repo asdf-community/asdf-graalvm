@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -e
+
+if [ "$ASDF_INSTALL_TYPE" != version ]; then
+  echo "The asdf-graalvm plugin only supports official binary releases." >&2
+  exit 1
+fi
+
+case "$(uname -s)" in
+  Linux) strip_level=1 ;;
+  Darwin) strip_level=3 ;;
+  *)
+    echo "$(uname -s) is not supported." >&2
+    exit 1
+    ;;
+esac
+
+stage=$(mktemp -d "${ASDF_DOWNLOAD_PATH%/*}/.graalvm.XXXXXX")
+trap 'rm -rf "$stage"' EXIT
+archive="$stage/graalvm.tar.gz"
+
+case "$ASDF_INSTALL_VERSION" in
+  liberica-nik-*)
+    "$(dirname "$0")/liberica-nik" download "${ASDF_INSTALL_VERSION#liberica-nik-}" "$archive"
+    ;;
+  *)
+    url=$("$(dirname "$0")/graalvm-releases" "$ASDF_INSTALL_VERSION")
+    if [ -z "$url" ]; then
+      echo "GraalVM version $ASDF_INSTALL_VERSION is unavailable for this platform." >&2
+      exit 1
+    fi
+    curl -fLsS --retry 2 --max-time 300 --proto '=https' --proto-redir '=https' -o "$archive" "$url"
+    ;;
+esac
+
+mkdir "$stage/jdk"
+tar -xzf "$archive" --strip-components "$strip_level" -C "$stage/jdk"
+if [ ! -x "$stage/jdk/bin/java" ]; then
+  echo "The GraalVM archive is missing Java." >&2
+  exit 1
+fi
+if [ "${ASDF_INSTALL_VERSION#liberica-nik-}" != "$ASDF_INSTALL_VERSION" ] && [ ! -x "$stage/jdk/bin/native-image" ]; then
+  echo "The Liberica NIK archive is missing Native Image." >&2
+  exit 1
+fi
+
+if [ -d "$ASDF_DOWNLOAD_PATH" ]; then
+  rmdir "$ASDF_DOWNLOAD_PATH"
+fi
+mv "$stage/jdk" "$ASDF_DOWNLOAD_PATH"

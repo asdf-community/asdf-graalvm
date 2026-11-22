@@ -37,11 +37,10 @@ liberica_releases() {
     '
 }
 
-install_liberica() (
+download_liberica() {
   local version=$1
-  local install_path=$2
-  local strip_level=$3
-  local release filename jdk_version tag asset download_url digest stage
+  local archive=$2
+  local release filename jdk_version tag asset download_url digest
 
   if ! release=$(liberica_releases | jq -er --arg version "$version" '.[] | select(.version == $version) | [.filename, .jdk] | @tsv'); then
     echo "Liberica NIK version $version is unavailable for this platform." >&2
@@ -51,7 +50,7 @@ install_liberica() (
 
   tag=$(jq -nr --arg tag "$version-$jdk_version" '$tag | @uri')
   if ! asset=$(
-    curl -fsS --max-time 30 "https://api.github.com/repos/bell-sw/LibericaNIK/releases/tags/$tag" |
+    "$(dirname "$0")/github-api" "https://api.github.com/repos/bell-sw/LibericaNIK/releases/tags/$tag" |
       jq -er --arg filename "$filename" '
         select(.draft == false and .prerelease == false)
         | .assets[]
@@ -66,9 +65,7 @@ install_liberica() (
   fi
   read -r download_url digest <<<"$asset"
 
-  stage=$(mktemp -d "${install_path%/*}/.nik.XXXXXX")
-  trap 'rm -rf "$stage"' EXIT
-  curl -fLsS --retry 2 --max-time 300 --proto '=https' --proto-redir '=https' -o "$stage/nik.tar.gz" "$download_url"
+  curl -fLsS --retry 2 --max-time 300 --proto '=https' --proto-redir '=https' -o "$archive" "$download_url"
 
   if [ -n "$(command -v sha256sum)" ]; then
     set -- sha256sum
@@ -76,20 +73,9 @@ install_liberica() (
     set -- shasum -a 256
   fi
   "$@" -c - <<EOF
-$digest  $stage/nik.tar.gz
+$digest  $archive
 EOF
-
-  mkdir "$stage/jdk"
-  tar -xzf "$stage/nik.tar.gz" --strip-components "$strip_level" -C "$stage/jdk"
-  if [ ! -x "$stage/jdk/bin/java" ] || [ ! -x "$stage/jdk/bin/native-image" ]; then
-    echo "The Liberica NIK archive is missing Java or Native Image." >&2
-    return 1
-  fi
-  if [ -d "$install_path" ]; then
-    rmdir "$install_path"
-  fi
-  mv "$stage/jdk" "$install_path"
-)
+}
 
 case "$1" in
   list)
@@ -99,8 +85,8 @@ case "$1" in
       | .[] | "liberica-nik-\(.)"
     '
     ;;
-  install)
+  download)
     shift
-    install_liberica "$@"
+    download_liberica "$@"
     ;;
 esac
