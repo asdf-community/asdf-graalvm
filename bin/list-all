@@ -1,7 +1,132 @@
 #!/usr/bin/env bash
-set -eo pipefail
 
-(
-  "$(dirname "$0")/liberica-nik" list
-  "$(dirname "$0")/graalvm-releases"
-) | xargs echo
+github_api() (
+  unset GITHUB_API_TOKEN
+  exec curl --disable -fsS --max-time 30 --header @- "$1"
+) <<EOF
+${GITHUB_API_TOKEN:+Authorization: Bearer $GITHUB_API_TOKEN}
+EOF
+
+github_releases() {
+  local repo=$1 page=1 response count
+
+  while :; do
+    response=$(github_api "https://api.github.com/repos/$repo/releases?per_page=100&page=$page")
+    jq -c '.[]' <<<"$response"
+    count=$(jq 'length' <<<"$response")
+    if [ "$count" -lt 100 ]; then
+      break
+    fi
+    page=$((page + 1))
+  done
+}
+
+graalvm_releases() {
+  local os legacy_os arch legacy_arch
+
+  case "$(uname -s)" in
+    Linux)
+      if [ -e "/lib/ld-musl-$(uname -m).so.1" ]; then
+        return 0
+      fi
+      os=linux legacy_os=linux
+      ;;
+    Darwin)
+      os=macos legacy_os=darwin
+      ;;
+    *) return 0 ;;
+  esac
+
+  case "$(uname -m)" in
+    x86_64) arch=x64 legacy_arch=amd64 ;;
+    arm64 | aarch64) arch=aarch64 legacy_arch=aarch64 ;;
+    *) return 0 ;;
+  esac
+
+  (
+    github_releases graalvm/graalvm-ce-builds
+    github_releases oracle/graal
+  ) | jq -rs --arg requested "${1:-}" --arg platform "$os-$arch" --arg legacy "$legacy_os-$legacy_arch" '
+    def version_for($tag):
+      if $tag | startswith("vm-") then
+        ($tag | ltrimstr("vm-")) as $version
+        | if . == "graalvm-ce-\($legacy)-\($version).tar.gz"
+            or . == "graalvm-ce-\($version)-\($legacy | sub("^darwin-"; "macos-")).tar.gz" then $version
+          else capture("^graalvm-ce-(?<java>java[0-9]+)-\($legacy)-(?<version>[0-9.]+)\\.tar\\.gz$")
+            | select(.version == $version)
+            | "\(.version)-\(.java)"
+          end
+      elif $tag | startswith("jdk-") then
+        select(endswith("_\($platform)_bin.tar.gz") and startswith("graalvm-community-jdk-"))
+        | $tag | ltrimstr("jdk-")
+      elif $tag | startswith("graal-") then
+        capture("^graalvm-community-jdk-(?<version>[0-9]+i[0-9]+-[0-9.]+)_\($platform)_bin\\.tar\\.gz$")
+        | .version
+      else empty
+      end;
+
+    [ .[] | select((.draft | not) and ($requested != "" or (.prerelease | not)))
+      | .tag_name as $tag
+      | .assets[]
+      | select(.browser_download_url | test("^https://github\\.com/(graalvm/graalvm-ce-builds|oracle/graal)/releases/download/"))
+      | {version: (.name | version_for($tag)), url: .browser_download_url}
+    ]
+    | if $requested != "" then
+        map(select(.version == $requested)) | first | .url // empty
+      else
+        map(.version) | unique
+        | sort_by([(sub("-java[0-9]+$"; "") | [scan("[0-9]+") | tonumber]),
+                   ([scan("java[0-9]+$") | ltrimstr("java") | tonumber])])
+        | .[]
+      end
+  '
+}
+
+liberica_releases() {
+  local cpu os arch
+  cpu=$(uname -m)
+  case "$cpu" in
+    arm64 | aarch64) arch=arm ;;
+    x86_64) arch=x86 ;;
+    *) return 0 ;;
+  esac
+
+  case "$(uname -s)" in
+    Darwin) os=macos ;;
+    Linux)
+      if [ -e "/lib/ld-musl-$cpu.so.1" ]; then
+        os=linux-musl
+      else
+        os=linux
+      fi
+      ;;
+    *) return 0 ;;
+  esac
+
+  curl -fsS --max-time 30 --get 'https://api.bell-sw.com/v1/nik/releases' \
+    --data-urlencode "os=$os" --data-urlencode "arch=$arch" --data-urlencode 'bitness=64' \
+    --data-urlencode 'bundle-type=standard' --data-urlencode 'package-type=tar.gz' \
+    --data-urlencode 'build-type=all' --data-urlencode 'installation-type=archive' \
+    --data-urlencode 'fields=version,filename,components,component,embedded' |
+    jq -c '
+      [.[] | . as $release
+        | select(.version | test("^[0-9]+(\\.[0-9]+)*\\+[0-9]+$"))
+        | .components[]
+        | select(.component == "liberica" and .embedded)
+        | select(.version | test("^25([.+])"))
+        | {version: $release.version, filename: $release.filename, jdk: .version}]
+    '
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  set -eo pipefail
+
+  (
+    liberica_releases | jq -r '
+      map(.version) | unique
+      | sort_by(split("+") | [(.[0] | split(".") | map(tonumber)), (.[1] | tonumber)])
+      | .[] | "liberica-nik-\(.)"
+    '
+    graalvm_releases
+  ) | xargs echo
+fi

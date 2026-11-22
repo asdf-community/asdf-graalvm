@@ -1,8 +1,0 @@
-#!/usr/bin/env sh
-
-{
-  unset GITHUB_API_TOKEN
-  exec curl --disable -fsS --max-time 30 --header @- "$1"
-} <<EOF
-${GITHUB_API_TOKEN:+Authorization: Bearer $GITHUB_API_TOKEN}
-EOF

@@ -1,5 +1,47 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
+
+. "$(dirname "$0")/list-all"
+
+download_liberica() {
+  local version=$1
+  local archive=$2
+  local release filename jdk_version tag asset download_url digest
+
+  if ! release=$(liberica_releases | jq -er --arg version "$version" '.[] | select(.version == $version) | [.filename, .jdk] | @tsv'); then
+    echo "Liberica NIK version $version is unavailable for this platform." >&2
+    return 1
+  fi
+  read -r filename jdk_version <<<"$release"
+
+  tag=$(jq -nr --arg tag "$version-$jdk_version" '$tag | @uri')
+  if ! asset=$(
+    github_api "https://api.github.com/repos/bell-sw/LibericaNIK/releases/tags/$tag" |
+      jq -er --arg filename "$filename" '
+        select(.draft == false and .prerelease == false)
+        | .assets[]
+        | select(.name == $filename)
+        | select(.browser_download_url | startswith("https://github.com/bell-sw/LibericaNIK/releases/download/"))
+        | select(.digest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+        | [.browser_download_url, (.digest | ltrimstr("sha256:"))] | @tsv
+      '
+  ); then
+    echo "Could not find a SHA-256 digest for $filename in BellSoft's release." >&2
+    return 1
+  fi
+  read -r download_url digest <<<"$asset"
+
+  curl -fLsS --retry 2 --max-time 300 --proto '=https' --proto-redir '=https' -o "$archive" "$download_url"
+
+  if [ -n "$(command -v sha256sum)" ]; then
+    set -- sha256sum
+  else
+    set -- shasum -a 256
+  fi
+  "$@" -c - <<EOF
+$digest  $archive
+EOF
+}
 
 if [ "$ASDF_INSTALL_TYPE" != version ]; then
   echo "The asdf-graalvm plugin only supports official binary releases." >&2
@@ -21,10 +63,10 @@ archive="$stage/graalvm.tar.gz"
 
 case "$ASDF_INSTALL_VERSION" in
   liberica-nik-*)
-    "$(dirname "$0")/liberica-nik" download "${ASDF_INSTALL_VERSION#liberica-nik-}" "$archive"
+    download_liberica "${ASDF_INSTALL_VERSION#liberica-nik-}" "$archive"
     ;;
   *)
-    url=$("$(dirname "$0")/graalvm-releases" "$ASDF_INSTALL_VERSION")
+    url=$(graalvm_releases "$ASDF_INSTALL_VERSION")
     if [ -z "$url" ]; then
       echo "GraalVM version $ASDF_INSTALL_VERSION is unavailable for this platform." >&2
       exit 1

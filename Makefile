@@ -10,5 +10,5 @@ format-check:
 .PHONY: format-check
 
 lint:
-	shellcheck $(SRCFILES)
+	shellcheck -x -P SCRIPTDIR $(SRCFILES)
 .PHONY: lint
